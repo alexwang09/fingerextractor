@@ -16,14 +16,14 @@ public class FingerExtractor {
 		try {
 			reader = new BufferedReader(new FileReader(file));
 			String tempString = null;
-			int line = 1;
+			int line = 0;
 			// 一次读入一行，直到读入null为文件结束
 			while ((tempString = reader.readLine()) != null) {
 				HttpRequest hr = new HttpRequest(tempString);
 				requestList.add(hr);
-				// System.out.println("line " + line + ": " + tempString);
-				// line++;
+			    line++;
 			}
+			System.out.println(line);
 			reader.close();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -39,16 +39,38 @@ public class FingerExtractor {
 	}
 
 	public static void generPTAs(ArrayList<HttpRequest> requestList) {
-		ArrayList<ArrayList<HttpRequest>> clusterList;
+		// System.out.println(requestList.size());
+		ArrayList<ArrayList<HttpRequest>> getClusterList;
+		ArrayList<ArrayList<HttpRequest>> posClusterList;
+		ArrayList<HttpRequest> getReqList = new ArrayList<>();
+		ArrayList<HttpRequest> posReqList = new ArrayList<>();
+
 		for (int i = 0; i < requestList.size(); i++) {
 			if (requestList.get(i).getPageComponentsList().size() == 0
 					&& requestList.get(i).getKeyList().size() == 0) {
 				requestList.remove(i);
 				i--;
+			} else if (requestList.get(i).getMethod() != null) {
+				if (requestList.get(i).getMethod().equals("GET")) {
+					getReqList.add(requestList.get(i));
+				}
+				if (requestList.get(i).getMethod().equals("POST")) {
+					posReqList.add(requestList.get(i));
+				}
 			}
 		}
-		clusterList = clusterAlgor(requestList);
-        //..
+		getClusterList = clusterAlgor(getReqList);
+		System.out.println("-------------------------------------------");
+		System.out.println("-------------------------------------------");
+		System.out.println("-------------------------------------------");
+		posClusterList = clusterAlgor(posReqList);
+		// ..
+
+	}
+
+	public static ArrayList<ArrayList<HttpRequest>> clusterAlgor2(
+			ArrayList<HttpRequest> requestList) {
+		return null;
 	}
 
 	public static ArrayList<ArrayList<HttpRequest>> clusterAlgor(
@@ -71,8 +93,8 @@ public class FingerExtractor {
 					int clusterSize2 = cluster.size();
 					for (i = 0; i < requestList.size(); i++) {
 						for (j = clusterSize; j < clusterSize2; j++) {
-							dh = getDistance(cluster.get(j), requestList.get(i));
-							if (dh < 0.6) {
+							dh = getDistance2(cluster.get(j), requestList.get(i));
+							if (dh <= 0.7) {
 								cluster.add(requestList.get(i));
 								requestList.remove(i);
 								i--;
@@ -86,19 +108,29 @@ public class FingerExtractor {
 				clusterList.add(cluster);
 			}
 		}
-		System.out.println(clusterList.size());
-		/*
-		 * for(int k=0;k<clusterList.size();k++){ for(int
-		 * m=0;m<clusterList.get(k).size();m++){ for(int
-		 * n=0;n<clusterList.get(k).get(m).getPageComponentsList().size();n++){
-		 * System
-		 * .out.print(clusterList.get(k).get(m).getPageComponentsList().get
-		 * (n)+" "); } for(int
-		 * n=0;n<clusterList.get(k).get(m).getKeyList().size();n++){
-		 * System.out.print(clusterList.get(k).get(m).getKeyList().get(n)+" ");
-		 * } System.out.println("\n"); }
-		 * System.out.println("--------------------------------------------"); }
-		 */
+		// System.out.println(clusterList.size());
+
+		for (int k = 0; k < clusterList.size(); k++) {
+			for (int m = 0; m < clusterList.get(k).size(); m++) {
+				System.out.print("pcs: ");
+				for (int n = 0; n < clusterList.get(k).get(m)
+						.getPageComponentsList().size(); n++) {
+					System.out.print(clusterList.get(k).get(m)
+							.getPageComponentsList().get(n)
+							+ " ");
+				}
+				System.out.print("key: ");
+				for (int n = 0; n < clusterList.get(k).get(m).getKeyList()
+						.size(); n++) {
+					System.out.print(clusterList.get(k).get(m).getKeyList()
+							.get(n)
+							+ " ");
+				}
+				System.out.println("\n");
+			}
+			System.out.println("--------------------------------------------");
+		}
+
 		return clusterList;
 	}
 
@@ -106,6 +138,47 @@ public class FingerExtractor {
 
 	}
 
+	//分别计算pcs和k部分的交集，并集则合起来计算
+	public static double getDistance2(HttpRequest req1, HttpRequest req2) {
+		double dp = 0.0, dq = 0.0, dh = 0.0, pcsInterNum = 0, pcsUnioNum = 0, kInterNum = 0, kUnioNum = 0;
+		int i, j;
+		int pcs1Size = req1.getPageComponentsList().size();
+		int pcs2Size = req2.getPageComponentsList().size();
+		int k1Size = req1.getKeyList().size();
+		int k2Size = req2.getKeyList().size();
+		int pcsMinSize = 0, pcsMaxSize = 0, kMinSize = 0, kMaxSize = 0;
+
+		pcsMinSize = Math.min(pcs1Size, pcs2Size);
+		pcsMaxSize = Math.max(pcs1Size, pcs2Size);
+		kMinSize = Math.min(k1Size, k2Size);
+		kMaxSize = Math.max(k1Size, k2Size);
+
+		for (i = 0; i < pcsMinSize; i++) {
+			if (req1.getPageComponentsList().get(i)
+					.equals(req2.getPageComponentsList().get(i))) {
+				pcsInterNum++;
+			} else {
+				pcsUnioNum++;
+			}
+		}
+		pcsUnioNum += pcsMaxSize;
+
+		for (i = 0; i < kMinSize; i++) {
+			if (req1.getKeyList().get(i).equals(req2.getKeyList().get(i))) {
+				kInterNum++;
+			} else {
+				kUnioNum++;
+			}
+		}
+		kUnioNum += kMaxSize;
+
+		dh = 1 - (pcsInterNum +kInterNum)/( pcsUnioNum+kUnioNum);
+
+		return dh;
+
+	}
+	
+	// pcs和k完全分开计算
 	public static double getDistance(HttpRequest Req1, HttpRequest Req2) {
 		double dp = 0.0, dq = 0.0, dh = 0.0, pcsInterNum = 0, pcsUnioNum = 0, kInterNum = 0, kUnioNum = 0;
 		int i, j;
@@ -142,13 +215,13 @@ public class FingerExtractor {
 		dp = 1 - pcsInterNum / pcsUnioNum;
 		dq = 1 - kInterNum / kUnioNum;
 
+		dh = (dp + dq) / 2;
 		if (pcsMaxSize == 0) {
-			dp = 0;
+			dh = dq;
 		}
 		if (kMaxSize == 0) {
-			dq = 0;
+			dh = dp;
 		}
-		dh = (dp + dq) / 2;
 
 		return dh;
 
