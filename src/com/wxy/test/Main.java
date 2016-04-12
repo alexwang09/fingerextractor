@@ -7,7 +7,7 @@ import java.util.List;
 public class Main {
 
 	public static void main(String[] args) {
-		FingerExtractor.readFileByLines("C:\\Users\\yym\\Desktop\\2.txt");
+		FingerExtractor.readFileByLines("C:\\Users\\yym\\Desktop\\4.txt");
 	}
 
 	
