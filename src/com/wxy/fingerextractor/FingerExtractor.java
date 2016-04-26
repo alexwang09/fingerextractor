@@ -1,4 +1,4 @@
-package com.wxy.test;
+package com.wxy.fingerextractor;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -6,7 +6,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.TreeSet;
 
 public class FingerExtractor {
 	public static void readFileByLines(String fileName) {
@@ -23,7 +25,7 @@ public class FingerExtractor {
 				requestList.add(hr);
 				line++;
 			}
-			System.out.println(line);
+			// System.out.println(line);
 			reader.close();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -43,8 +45,13 @@ public class FingerExtractor {
 		ArrayList<ArrayList<HttpRequest>> posClusterList;
 		ArrayList<HttpRequest> getReqList = new ArrayList<>();
 		ArrayList<HttpRequest> posReqList = new ArrayList<>();
+		ArrayList<FingerPrint> getFingerPrints = new ArrayList<>();
+		ArrayList<FingerPrint> posFingerPrints = new ArrayList<>();
+		ArrayList<PrefixTreeAcceptors> getPTAList = new ArrayList<>();
+		ArrayList<PrefixTreeAcceptors> posPTAList = new ArrayList<>();
+		int i, j, k, m, p, q;
 
-		for (int i = 0; i < requestList.size(); i++) {
+		for (i = 0; i < requestList.size(); i++) {
 			if (requestList.get(i).getPageComponentsList().size() == 0
 					&& requestList.get(i).getKeyList().size() == 0) {
 				requestList.remove(i);
@@ -60,41 +67,89 @@ public class FingerExtractor {
 		}
 
 		getClusterList = clusterAlgor(getReqList);
-		for (int i = 0; i < getClusterList.size(); i++) {
-			ArrayList<String> getStateMachine = generStateMachine(getClusterList.get(i));
-			for(int j=0;j<getStateMachine.size();j++){
-				System.out.print(getStateMachine.get(j)+" ");
+		for (i = 0; i < getClusterList.size(); i++) {
+			FingerPrint fingerPrint = generFingerPrint(getClusterList.get(i));
+			getFingerPrints.add(fingerPrint);
+		}
+		posClusterList = clusterAlgor(posReqList);
+		for (i = 0; i < posClusterList.size(); i++) {
+			FingerPrint fingerPrint = generFingerPrint(posClusterList.get(i));
+			posFingerPrints.add(fingerPrint);
+		}
+		
+		getPTAList=mergeFingerPrints(getFingerPrints);
+		posPTAList=mergeFingerPrints(getFingerPrints);
+	
+		System.out.println(getPTAList.size());
+		for (i = 0; i < getPTAList.size(); i++) {
+	
+			System.out.print("finger" + (i + 1) + ": ");
+			Iterator it = getPTAList.get(i).getHostSet().iterator();
+			while (it.hasNext()) {
+				String fruit = (String) it.next();
+				System.out.print(fruit + " ");
+			}
+			for (j = 0; j < getPTAList.get(i).getStateMachineList().size(); j++) {
+				System.out.print(getPTAList.get(i).getStateMachineList().get(j) + " ");
 			}
 			System.out.print("\n");
 		}
-
-		System.out.println("-------------------------------------------");
-		System.out.println("-------------------------------------------");
-		System.out.println("-------------------------------------------");
-
-		posClusterList = clusterAlgor(posReqList);
-		for (int i = 0; i < posClusterList.size(); i++) {
-			generStateMachine(posClusterList.get(i));
-		}
-
 	}
 
-	public static ArrayList<String> generStateMachine(ArrayList<HttpRequest> requestList) {
+	private static int generSimilarity(String host1, String host2) {
+		String[] domains1 = host1.split("\\.");
+		String[] domains2 = host2.split("\\.");
+		int dom1Length = domains1.length;
+		int dom2Length = domains2.length;
+		int similarity = 0;
+		int minLength = Math.min(dom1Length, dom2Length);
+		for (int i = 0; i < minLength; i++) {
+			if (domains1[dom1Length - 1].equals(domains2[dom2Length - 1])) {
+				similarity++;
+			}
+			dom1Length--;
+			dom2Length--;
+		}
+		if (similarity == domains1.length && similarity == domains2.length) {
+			similarity = 10;
+		}
+		return similarity;
+	}
 
+	@SuppressWarnings("null")
+	public static FingerPrint generFingerPrint(
+			ArrayList<HttpRequest> requestList) {
+
+		FingerPrint fingerPrint = new FingerPrint();
+		TreeSet<String> hostSet = new TreeSet<>();
 		ArrayList<String> stateMachine = new ArrayList<>();
 		ArrayList<String> pcStrings = new ArrayList<>();
 		ArrayList<String> kStrings = new ArrayList<>();
+
 		int pcsSize = requestList.get(0).getPageComponentsList().size();
 		int kSize = requestList.get(0).getKeyList().size();
 		int i, j, k, flag = -1;
+		// 得到host
+		for (i = 0; i < requestList.size(); i++) {
+			if (requestList.get(i).getHost() != null) {
+				hostSet.add(requestList.get(i).getHost());
+			}
+		}
 
+		// 得到method
+		if (requestList.get(0).getMethod().equals("GET")) {
+			stateMachine.add("GET");
+		} else {
+			stateMachine.add("POST");
+		}
+		// 得到pcs
 		for (i = 0; i < pcsSize; i++) {
 			pcStrings.add(requestList.get(0).getPageComponentsList().get(i));
 		}
 
 		for (i = 0; i < pcStrings.size(); i++) {
 			for (j = 1; j < requestList.size(); j++) {
-				flag=-1;
+				flag = -1;
 				for (k = 0; k < requestList.get(j).getPageComponentsList()
 						.size(); k++) {
 					if (pcStrings.get(i).equals(
@@ -103,42 +158,44 @@ public class FingerExtractor {
 						break;
 					}
 				}
-				
-				if(flag<0){
+
+				if (flag < 0) {
 					pcStrings.remove(i);
 					i--;
 					break;
 				}
 			}
 		}
-		
+		// 得到key
 		for (i = 0; i < kSize; i++) {
 			kStrings.add(requestList.get(0).getKeyList().get(i));
 		}
 
 		for (i = 0; i < kStrings.size(); i++) {
 			for (j = 1; j < requestList.size(); j++) {
-				flag=-1;
-				for (k = 0; k < requestList.get(j).getKeyList()
-						.size(); k++) {
+				flag = -1;
+				for (k = 0; k < requestList.get(j).getKeyList().size(); k++) {
 					if (kStrings.get(i).equals(
 							requestList.get(j).getKeyList().get(k))) {
 						flag = 0;
 						break;
 					}
 				}
-				
-				if(flag<0){
+
+				if (flag < 0) {
 					kStrings.remove(i);
 					i--;
 					break;
 				}
 			}
 		}
-		
-		pcStrings.addAll(kStrings);
-		stateMachine=pcStrings;
-		return stateMachine;
+
+		stateMachine.addAll(pcStrings);
+		stateMachine.addAll(kStrings);
+		fingerPrint.setHostSet(hostSet);
+		fingerPrint.setStateMachine(stateMachine);
+
+		return fingerPrint;
 	}
 
 	public static ArrayList<ArrayList<HttpRequest>> clusterAlgor2(
@@ -182,34 +239,103 @@ public class FingerExtractor {
 				clusterList.add(cluster);
 			}
 		}
-		System.out.println(clusterList.size());
+		// System.out.println(clusterList.size());
 
-		for (int k = 0; k < clusterList.size(); k++) {
-			for (int m = 0; m < clusterList.get(k).size(); m++) {
-				System.out.print("pcs: ");
-				for (int n = 0; n < clusterList.get(k).get(m)
-						.getPageComponentsList().size(); n++) {
-					System.out.print(clusterList.get(k).get(m)
-							.getPageComponentsList().get(n)
-							+ " ");
-				}
-				System.out.print("key: ");
-				for (int n = 0; n < clusterList.get(k).get(m).getKeyList()
-						.size(); n++) {
-					System.out.print(clusterList.get(k).get(m).getKeyList()
-							.get(n)
-							+ " ");
-				}
-				System.out.println("\n");
-			}
-			System.out.println("--------------------------------------------");
-		}
+		/*
+		 * for (int k = 0; k < clusterList.size(); k++) { for (int m = 0; m <
+		 * clusterList.get(k).size(); m++) {
+		 * System.out.print(clusterList.get(k).get(m).getMethod()+" ");
+		 * System.out.print("pcs: "); for (int n = 0; n <
+		 * clusterList.get(k).get(m) .getPageComponentsList().size(); n++) {
+		 * System.out.print(clusterList.get(k).get(m)
+		 * .getPageComponentsList().get(n) + " "); } System.out.print("key: ");
+		 * for (int n = 0; n < clusterList.get(k).get(m).getKeyList() .size();
+		 * n++) { System.out.print(clusterList.get(k).get(m).getKeyList()
+		 * .get(n) + " "); } System.out.println("\n"); }
+		 * System.out.println("--------------------------------------------"); }
+		 */
 
 		return clusterList;
 	}
 
-	public static void mergePTAs() {
+	public static ArrayList<PrefixTreeAcceptors> mergeFingerPrints(ArrayList<FingerPrint> fingerPrints) {
+		ArrayList<PrefixTreeAcceptors> ptaList = new ArrayList<>();
+		int i,j,k,m,p,q;
+		for (i = 0; i < fingerPrints.size(); i++) {
+			PrefixTreeAcceptors pta = new PrefixTreeAcceptors();
+			ArrayList<ArrayList<String>> stateMachineList = new ArrayList<>();
 
+			pta.setHostSet(fingerPrints.get(i).getHostSet());
+			stateMachineList.add(fingerPrints.get(i).getStateMachine());
+			pta.setStateMachineList(stateMachineList);
+			ptaList.add(pta);
+		}
+
+		for (i = 0; i < ptaList.size(); i++) {
+			ArrayList<ArrayList<String>> stateMachineList = new ArrayList<>();
+			for (j = 0; j < ptaList.size(); j++) {
+				if (i != j) {
+					int flag = -1;
+					Iterator it1 = ptaList.get(i).getHostSet().iterator();
+					for (k = 0; k < ptaList.get(i).getHostSet().size(); k++) {
+						String host1 = (String) it1.next();
+						Iterator it2 = ptaList.get(j).getHostSet().iterator();
+						for (m = 0; m < ptaList.get(j).getHostSet().size(); m++) {
+							String host2 = (String) it2.next();
+							int hostSimilarity = generSimilarity(host1, host2);
+							if (hostSimilarity == 10) {
+								ptaList.get(i).getHostSet()
+										.addAll(ptaList.get(j).getHostSet());
+								ptaList.get(i)
+										.getStateMachineList()
+										.addAll(ptaList.get(j)
+												.getStateMachineList());
+								flag = 0;
+								break;
+							} else if (hostSimilarity >= 2) {
+								for (p = 0; p < ptaList.get(i)
+										.getStateMachineList().size(); p++) {
+									for (q = 0; q < ptaList.get(j)
+											.getStateMachineList().size(); q++) {
+										if (ptaList.get(i)
+												.getStateMachineList().get(p)
+												.size() > 2
+												&& ptaList.get(j)
+														.getStateMachineList()
+														.get(q).size() > 2) {
+											if (ptaList.get(i)
+													.getStateMachineList()
+													.get(p).get(1) == ptaList
+													.get(j)
+													.getStateMachineList()
+													.get(q).get(1)) {
+												ptaList.get(i)
+														.getHostSet()
+														.addAll(ptaList.get(j)
+																.getHostSet());
+												ptaList.get(i)
+														.getStateMachineList()
+														.addAll(ptaList
+																.get(j)
+																.getStateMachineList());
+												flag = 0;
+												break;
+											}
+										}
+									}
+								}
+							}
+						}
+						if (flag == 0) {
+							ptaList.remove(j);
+							j--;
+							break;
+						}
+					}
+				}
+			}
+		}
+		return ptaList;
 	}
 
 	// 分别计算pcs和k部分的交集，并集则合起来计算;顺序比较

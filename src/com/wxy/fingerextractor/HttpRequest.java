@@ -1,4 +1,4 @@
-package com.wxy.test;
+package com.wxy.fingerextractor;
 
 import java.util.ArrayList;
 
@@ -68,7 +68,6 @@ public class HttpRequest {
 				String page = null, query = null;
 				if (pcsEndNum >= 0) {
 					page = tempString.substring(0, pcsEndNum);
-
 					query = tempString.substring(pcsEndNum + 1);
 				//	System.out.println(query);
 					while (query.length() > 0) {
@@ -102,13 +101,13 @@ public class HttpRequest {
 					pcsStartNum = page.indexOf("/");
 					if (pcsStartNum >= 0) {
 						if (!page.substring(0, pcsStartNum).contains(".")) {
-							pageComponentsList.add(page.substring(0,
-									pcsStartNum));
+							pageComponentsList.add("/".concat(page.substring(0,
+									pcsStartNum)));
 						}
 						page = page.substring(pcsStartNum);
 					} else {
 						if (!page.contains(".")) {
-							pageComponentsList.add(page);
+							pageComponentsList.add("/".concat(page));
 						}
 					}
 				}
